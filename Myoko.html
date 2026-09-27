@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NER-SLIP — MVP Demo</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --border:#e2e6ec; --text:#1a2233; --muted:#5b6472;
+    --navy:#1f3864; --orange:#e07b39; --green:#2e7d32; --red:#c0392b; --amber:#d9a441;
+    --clear:#2e7d32; --caution:#d9a441; --blocked:#c0392b;
+    --accent:#1f6fb2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12161f; --panel:#1b2130; --border:#2a3244; --text:#e8ecf3; --muted:#9aa4b5;
+      --navy:#5a7fc4; --accent:#4a9fe0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12161f; --panel:#1b2130; --border:#2a3244; --text:#e8ecf3; --muted:#9aa4b5;
+    --navy:#5a7fc4; --accent:#4a9fe0;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  header{
+    padding:14px 18px; background:var(--navy); color:#fff; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  header h1{font-size:16px; margin:0; font-weight:700;}
+  header .sub{font-size:11.5px; opacity:.85; margin-left:auto;}
+  .badge{background:rgba(255,255,255,.15); padding:3px 8px; border-radius:20px; font-size:10.5px;}
+
+  .layout{display:flex; gap:14px; padding:14px; max-width:1300px; margin:0 auto; flex-wrap:wrap;}
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px;}
+
+  .col-list{flex:0 0 280px; min-width:240px;}
+  .col-map{flex:1 1 480px; min-width:320px;}
+  .col-detail{flex:0 0 300px; min-width:260px;}
+
+  h2{font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px;}
+
+  .weather-ctrl{margin-bottom:14px;}
+  .weather-ctrl label{font-size:11.5px; color:var(--muted); display:flex; justify-content:space-between;}
+  .weather-ctrl input[type=range]{width:100%; margin-top:6px;}
+
+  .corridor-item{
+    display:flex; align-items:center; gap:8px; padding:8px 6px; border-radius:8px; cursor:pointer; font-size:12px;
+    border:1px solid transparent;
+  }
+  .corridor-item:hover{background:var(--bg);}
+  .corridor-item.active{border-color:var(--accent); background:var(--bg);}
+  .dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+  .corridor-item .name{flex:1;}
+  .corridor-item .score{font-variant-numeric:tabular-nums; color:var(--muted); font-size:10.5px;}
+
+  svg{width:100%; height:auto; display:block;}
+  .node circle{fill:var(--panel); stroke:var(--navy); stroke-width:2;}
+  .node text{font-size:11px; fill:var(--text); font-weight:600;}
+  .edge{stroke-width:5; cursor:pointer; transition:stroke .2s;}
+  .edge:hover{opacity:.8;}
+  .veh{fill:#fff; stroke:var(--navy); stroke-width:2;}
+  .veh-label{font-size:8.5px; fill:var(--muted);}
+
+  .legend{display:flex; gap:14px; margin-top:10px; font-size:10.5px; color:var(--muted); flex-wrap:wrap;}
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend .dot{width:9px; height:9px;}
+
+  .detail-empty{color:var(--muted); font-size:12px; line-height:1.5;}
+  .stat-row{display:flex; justify-content:space-between; font-size:12px; padding:5px 0; border-bottom:1px dashed var(--border);}
+  .stat-row b{font-variant-numeric:tabular-nums;}
+  .status-pill{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; color:#fff; margin:6px 0;}
+
+  .alert-box{background:var(--bg); border-radius:8px; padding:10px; margin-top:10px; font-size:11.5px; line-height:1.5;}
+  .alert-box .lang{color:var(--accent); font-weight:700; font-size:10px; text-transform:uppercase; margin-bottom:3px;}
+
+  button{
+    font-family:inherit; border:none; border-radius:8px; padding:9px 12px; font-size:12px; font-weight:600;
+    cursor:pointer; background:var(--accent); color:#fff; width:100%; margin-top:8px;
+  }
+  button.secondary{background:transparent; border:1px solid var(--border); color:var(--text);}
+
+  .report-btn-wrap{margin-top:14px;}
+
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;
+  }
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--panel); border-radius:12px; padding:18px; max-width:360px; width:100%;}
+  .modal h3{margin:0 0 10px; font-size:14px;}
+  .modal label{font-size:11.5px; color:var(--muted); display:block; margin:8px 0 4px;}
+  .modal select, .modal input[type=file]{width:100%; padding:7px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:12px;}
+
+  .toast{
+    position:fixed; bottom:calc(18px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%);
+    background:var(--navy); color:#fff; padding:10px 18px; border-radius:20px; font-size:12px; opacity:0; pointer-events:none;
+    transition:opacity .25s; z-index:60; max-width:90%; text-align:center;
+  }
+  .toast.show{opacity:1;}
+
+  .disclaimer{font-size:10px; color:var(--muted); text-align:center; padding:8px 14px 18px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚧 NER-SLIP — Smart Logistics & Accessibility Intelligence</h1>
+  <span class="badge">MVP Demo · synthetic data</span>
+  <span class="sub">SIH 2026 · PS 26002 · Team Myoko</span>
+</header>
+
+<div class="layout">
+
+  <div class="panel col-list">
+    <h2>Corridors</h2>
+    <div class="weather-ctrl">
+      <label>Simulated rainfall <span id="rainVal">40mm</span></label>
+      <input type="range" id="rainSlider" min="0" max="100" value="40">
+    </div>
+    <div id="corridorList"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--clear)"></i>Clear</span>
+      <span><i class="dot" style="background:var(--caution)"></i>Caution</span>
+      <span><i class="dot" style="background:var(--blocked)"></i>Blocked</span>
+    </div>
+  </div>
+
+  <div class="panel col-map">
+    <h2>Accessibility Map (schematic)</h2>
+    <svg viewBox="0 0 640 460" id="mapSvg"></svg>
+    <div class="legend">
+      <span>🚚 = simulated vehicle · click a corridor line for detail</span>
+    </div>
+  </div>
+
+  <div class="panel col-detail" id="detailPanel">
+    <h2>Corridor Detail</h2>
+    <div class="detail-empty">Click a corridor on the map or list to see its disruption score, suggested reroute, and alert preview.</div>
+  </div>
+
+</div>
+
+<div style="max-width:1300px;margin:0 auto;padding:0 14px;">
+  <div class="report-btn-wrap panel" style="text-align:center;">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Field team? Log a ground report</div>
+    <button id="openReport" style="max-width:280px;margin:0 auto;">📷 Submit Field Report</button>
+  </div>
+</div>
+
+<div class="disclaimer">Demo runs entirely on seeded/synthetic data in your browser — no live sensors, GPS feeds, or CV models are connected.</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Field Incident Report</h3>
+    <label>Corridor</label>
+    <select id="repCorridor"></select>
+    <label>Hazard type</label>
+    <select id="repHazard">
+      <option>Road crack / slope movement</option>
+      <option>Debris on road</option>
+      <option>Flooded stretch</option>
+      <option>Bridge damage</option>
+    </select>
+    <label>Geo-tagged photo</label>
+    <input type="file" accept="image/*">
+    <button id="submitReport">Submit Report</button>
+    <button class="secondary" id="closeReport">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const corridors = [
+  {id:"guw-shl", name:"Guwahati – Shillong (NH-6)", from:"guw", to:"shl", terrain:0.45},
+  {id:"guw-ita", name:"Guwahati – Itanagar (NH-15)", from:"guw", to:"ita", terrain:0.60},
+  {id:"ita-koh", name:"Itanagar – Kohima (NH-129)", from:"ita", to:"koh", terrain:0.75},
+  {id:"koh-imp", name:"Kohima – Imphal (NH-2)", from:"koh", to:"imp", terrain:0.55},
+  {id:"imp-aiz", name:"Imphal – Aizawl (NH-102)", from:"imp", to:"aiz", terrain:0.80},
+  {id:"guw-agt", name:"Guwahati – Agartala (NH-8)", from:"guw", to:"agt", terrain:0.50},
+  {id:"guw-gtk", name:"Guwahati – Gangtok (NH-10)", from:"guw", to:"gtk", terrain:0.65},
+  {id:"shl-agt", name:"Shillong – Agartala (NH-6/8)", from:"shl", to:"agt", terrain:0.40},
+];
+
+const nodes = {
+  guw:{x:230,y:230,label:"Guwahati"},
+  shl:{x:280,y:300,label:"Shillong"},
+  ita:{x:420,y:90,label:"Itanagar"},
+  koh:{x:480,y:170,label:"Kohima"},
+  imp:{x:440,y:260,label:"Imphal"},
+  aiz:{x:380,y:360,label:"Aizawl"},
+  agt:{x:150,y:340,label:"Agartala"},
+  gtk:{x:120,y:110,label:"Gangtok"},
+};
+
+const altRoutes = {
+  "ita-koh": "Itanagar → Guwahati → Shillong → Kohima (via NH-6/NH-40, +3.5 hrs)",
+  "imp-aiz": "Imphal → Kohima → Guwahati → Aizawl (via NH-2/NH-6, +5 hrs)",
+  "guw-ita": "Guwahati → Shillong → Itanagar (via NH-6 link road, +2 hrs)",
+};
+
+const alertText = {
+  en: (c,status) => `ALERT: ${c.name} is currently ${status}. Avoid travel unless essential. Alternate route${altRoutes[c.id] ? " suggested" : " being assessed"}.`,
+  as: (c,status) => `সতৰ্কবাৰ্তা: ${c.name} বৰ্তমান ${status === "BLOCKED" ? "অৱৰুদ্ধ" : "সাৱধানতাৰ স্তৰত"}। অতি প্ৰয়োজন নহ'লে যাত্ৰা নকৰিব।`,
+};
+
+let rainfall = 40;
+let selected = null;
+
+function disruptionScore(c){
+  const rainNorm = rainfall/100;
+  const score = 0.55*rainNorm + 0.45*c.terrain*Math.max(rainNorm,0.3);
+  return Math.min(1, score);
+}
+function statusOf(score){
+  if(score >= 0.7) return "BLOCKED";
+  if(score >= 0.4) return "CAUTION";
+  return "CLEAR";
+}
+function colorOf(status){
+  return status==="BLOCKED" ? "var(--blocked)" : status==="CAUTION" ? "var(--caution)" : "var(--clear)";
+}
+
+function render(){
+  document.getElementById("rainVal").textContent = rainfall + "mm";
+
+  // list
+  const list = document.getElementById("corridorList");
+  list.innerHTML = "";
+  corridors.forEach(c=>{
+    const s = disruptionScore(c), status = statusOf(s);
+    const div = document.createElement("div");
+    div.className = "corridor-item" + (selected===c.id ? " active":"");
+    div.innerHTML = `<span class="dot" style="background:${colorOf(status)}"></span><span class="name">${c.name}</span><span class="score">${(s*100).toFixed(0)}%</span>`;
+    div.onclick = ()=>{ selected=c.id; render(); };
+    list.appendChild(div);
+  });
+
+  // map
+  const svg = document.getElementById("mapSvg");
+  let html = "";
+  corridors.forEach(c=>{
+    const a = nodes[c.from], b = nodes[c.to];
+    const s = disruptionScore(c), status = statusOf(s);
+    html += `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${colorOf(status)}" data-id="${c.id}" stroke-width="${status==='BLOCKED'?7:5}" stroke-dasharray="${status==='CAUTION'?'6,4':'none'}"/>`;
+  });
+  Object.entries(nodes).forEach(([k,n])=>{
+    html += `<g class="node"><circle cx="${n.x}" cy="${n.y}" r="16"/><text x="${n.x}" y="${n.y+30}" text-anchor="middle">${n.label}</text></g>`;
+  });
+  // simulated vehicles: midpoint of two edges, offset toward blocked awareness
+  const vehEdges = [corridors[1], corridors[3]];
+  vehEdges.forEach((c,i)=>{
+    const a = nodes[c.from], b = nodes[c.to];
+    const t = 0.4 + i*0.15;
+    const vx = a.x + (b.x-a.x)*t, vy = a.y + (b.y-a.y)*t;
+    const s = disruptionScore(c); const status = statusOf(s);
+    const eta = status==="BLOCKED" ? "ETA delayed — rerouting" : status==="CAUTION" ? "ETA +25%" : "On schedule";
+    html += `<g><circle class="veh" cx="${vx}" cy="${vy}" r="7"/><text class="veh-label" x="${vx}" y="${vy-12}" text-anchor="middle">🚚 ${eta}</text></g>`;
+  });
+  svg.innerHTML = html;
+  svg.querySelectorAll(".edge").forEach(el=>{
+    el.onclick = ()=>{ selected = el.dataset.id; render(); };
+  });
+
+  // detail panel
+  const dp = document.getElementById("detailPanel");
+  if(!selected){
+    dp.innerHTML = `<h2>Corridor Detail</h2><div class="detail-empty">Click a corridor on the map or list to see its disruption score, suggested reroute, and alert preview.</div>`;
+    return;
+  }
+  const c = corridors.find(x=>x.id===selected);
+  const s = disruptionScore(c), status = statusOf(s);
+  const hydro = (0.55*(rainfall/100)*100).toFixed(0);
+  const terr = (0.45*c.terrain*Math.max(rainfall/100,0.3)*100).toFixed(0);
+  dp.innerHTML = `
+    <h2>Corridor Detail</h2>
+    <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${c.name}</div>
+    <span class="status-pill" style="background:${colorOf(status)}">${status}</span>
+    <div class="stat-row"><span>Disruption score</span><b>${(s*100).toFixed(0)}%</b></div>
+    <div class="stat-row"><span>Hydrology component</span><b>${hydro}%</b></div>
+    <div class="stat-row"><span>Terrain susceptibility</span><b>${(c.terrain*100).toFixed(0)}%</b></div>
+    <div class="stat-row"><span>Terrain-adjusted component</span><b>${terr}%</b></div>
+    ${status!=="CLEAR" ? `<div class="alert-box"><div class="lang">Suggested reroute</div>${altRoutes[c.id] || "Nearest parallel corridor being evaluated (demo placeholder)."}</div>` : ""}
+    ${status!=="CLEAR" ? `
+    <div class="alert-box"><div class="lang">English alert</div>${alertText.en(c,status)}</div>
+    <div class="alert-box"><div class="lang">Assamese alert</div>${alertText.as(c,status)}</div>
+    <button id="sendAlert">📣 Dispatch Alert (demo)</button>
+    ` : `<div class="detail-empty" style="margin-top:10px;">Corridor is clear — no alert needed.</div>`}
+  `;
+  const sendBtn = document.getElementById("sendAlert");
+  if(sendBtn) sendBtn.onclick = ()=> showToast(`Alert dispatched for ${c.name} (demo — no real SMS/voice sent).`);
+}
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove("show"), 3200);
+}
+
+document.getElementById("rainSlider").addEventListener("input", e=>{
+  rainfall = parseInt(e.target.value,10); render();
+});
+
+// field report modal
+const modalBg = document.getElementById("modalBg");
+const repSelect = document.getElementById("repCorridor");
+corridors.forEach(c=>{ const o=document.createElement("option"); o.value=c.id; o.textContent=c.name; repSelect.appendChild(o); });
+document.getElementById("openReport").onclick = ()=> modalBg.classList.add("open");
+document.getElementById("closeReport").onclick = ()=> modalBg.classList.remove("open");
+document.getElementById("submitReport").onclick = ()=>{
+  modalBg.classList.remove("open");
+  const conf = (70 + Math.random()*25).toFixed(0);
+  showToast(`Report logged. On-device CV confidence: ${conf}% (demo placeholder).`);
+};
+
+render();
+</script>
+</body>
+</html>
